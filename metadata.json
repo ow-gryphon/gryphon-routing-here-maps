@@ -1,13 +1,13 @@
 {
-    "display_name": "",
-    "command": "",
+    "display_name": "Geocoding, Routing and Distance calculations with HERE Maps API",
+    "command": "generate",
     "dependencies": [],
 
-    "keywords": [],
-    "methodology": [],
+    "keywords": ["Mapping", "Routing", "Distance", "Geographical"],
+    "methodology": ["Geographical Analyses"],
     "topic": [],
 
-    "description": "",
-    "author": "",
-    "author_email": ""
+    "description": "Standardized Jupyter Notebook for Geocoding and Routing, using HERE Maps API (free for limited use)",
+    "author": "Daniel Wang",
+    "author_email": "daniel.wang@oliverwyman.com"
 }

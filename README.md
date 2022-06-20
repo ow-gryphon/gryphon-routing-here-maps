@@ -1,4 +1,3 @@
 
-In the ./requirements.txt one should specify the dependencies between templates.
+For more information, see https://owlabs.atlassian.net/wiki/spaces/MappingAssets/overview
 
-in the ./template/requirements.txt one should specify only the external libraries.
