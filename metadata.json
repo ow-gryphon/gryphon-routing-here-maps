@@ -4,8 +4,9 @@
     "dependencies": ["pandas"],
 
     "keywords": ["Mapping", "Routing", "Distance", "Geographical"],
-    "methodology": ["Geographical Analyses"],
+    "methodology": ["Geospatial"],
     "topic": [],
+    "sector": [],
 
     "description": "Standardized Jupyter Notebook for Geocoding and Routing, using HERE Maps API (free for limited use)",
     "author": "Daniel Wang",
