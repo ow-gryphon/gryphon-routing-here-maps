@@ -10,5 +10,6 @@
 
     "description": "Standardized Jupyter Notebook for Geocoding and Routing, using HERE Maps API (free for limited use)",
     "author": "Daniel Wang",
-    "author_email": "daniel.wang@oliverwyman.com"
+    "author_email": "daniel.wang@oliverwyman.com",
+    "read_more_link": "https://github.com/ow-gryphon/gryphon-routing-here-maps"
 }
