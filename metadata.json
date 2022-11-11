@@ -1,7 +1,7 @@
 {
     "display_name": "Geocoding, Routing and Distance calculations with HERE Maps API",
     "command": "generate",
-    "dependencies": ["pandas"],
+    "dependencies": ["pandas", "requests", "json"],
 
     "keywords": ["Mapping", "Routing", "Distance", "Geographical"],
     "methodology": ["Geospatial"],
