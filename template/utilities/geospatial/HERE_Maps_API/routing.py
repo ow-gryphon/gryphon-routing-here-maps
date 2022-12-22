@@ -10,22 +10,51 @@ warnings.filterwarnings("ignore", message="Unverified HTTPS request is being mad
 
 
 # Basic API call for getting the driving distance (in meters) and duration (in seconds) for any eligible transport mode
-def get_route_info(origin, destination, api_key, transportMode):
+def get_route_info(origin, destination, api_key, transportMode, departureTime="any", routingMode="fast", borders=None):
     """
     origin and destination should be in a string "latitude,longitude"
     transportMode can be 'pedestrian', 'car', 'truck', 'bicycle' or 'scooter'
     outputs provided are in meters and seconds
+    departureTime specifies the time of departure as defined by either date-time or full-date T partial-time in RFC 3339, section 5.6 (for example, 2019-06-24T01:23:45). The requested time is converted to local time at origin. When the optional timezone offset is not specified, time is assumed to be local. The special value any can be used to indicate that time should not be taken into account during routing. If neither departureTime or arrivalTime are specified, current time at departure place will be used. All time values in the response are returned in the timezone of each location.
+    routingMode can be "fast" or "short"
+    borders can be "country" or "state"
+    For more, see: https://developer.here.com/documentation/routing-api/api-reference-swagger.html 
     """
     # Checks
     assert transportMode in ['pedestrian', 'car', 'truck', 'bicycle', 'scooter'], "Invalid value for transportMode. Should be one of 'pedestrian', 'car', 'truck', 'bicycle' or 'scooter'"
     
     # Code for requests
     URL = "https://router.hereapi.com/v8/routes"
+    
+    # Generate parameters
     PARAMS = {'apikey':api_key,
               'transportMode':transportMode,
               'origin':origin,
               'destination':destination,
-              'return':'summary,typicalDuration'} 
+              'departureTime': departureTime,
+              'routingMode': routingMode,
+              }
+              
+    return_value='summary'
+    spans = []
+    if borders:
+        
+        if borders == "country":
+            borders = "countryCode"
+        elif borders == "state":
+            borders = "countryCode,stateCode"
+        else:
+            raise ValueError("Inappropriate value for 'borders': Has to be None, 'country' or 'state'")
+        
+        return_value = return_value + ',polyline'
+        
+        spans.append(borders)
+    
+    if len(spans):
+        PARAMS['spans'] = ",".join(spans)
+    
+    PARAMS['return'] = return_value
+    
     r=requests.get(url=URL,params=PARAMS, verify=False)
     out=r.json()
     return out
@@ -39,47 +68,121 @@ def get_route_info(origin, destination, api_key, transportMode):
 def process_routing(out, summary_only, mile_or_meter):
     # Check successful output
     if out.get('status') is not None:
-        return {'duration': None, 'length': None, 'baseDuration': None, 'typicalDuration': None}
+        return {'duration': None, 'length': None}
     
     if len(out['routes']) == 0:
-        return {'duration': None, 'length': None, 'baseDuration': None, 'typicalDuration': None}
+        return {'duration': None, 'length': None}
     
-    if mile_or_meter == "mile":
-        out['routes'][0]['sections'][0]['summary']['length'] = out['routes'][0]['sections'][0]['summary']['length'] / 1609.34
+    # Generate summary
+    results = []
+    sum_duration = 0
+    sum_length = 0
+    
+    route_id=0 # First route only
+    modes=set()
+    countries=set()
+    states=set()
+    
+    for section_id, section in enumerate(out['routes'][route_id]['sections']):
+        additional_duration = 0
+        if section.get('preActions'):
+            for preAction in section.get('preActions'):
+                additional_duration += preAction['duration']
+        if section.get('postActions'):
+            for postActions in section.get('postActions'):
+                additional_duration += postActions['duration']
+        
+        this_mode = section['transport'].get('mode')
+        modes = modes.union(set([this_mode]))
+        
+        local_countries = []
+        local_states = []
+        if 'spans' in section.keys():
+            spans = section['spans']
+            for span in spans:
+                if span.get('countryCode'):
+                    local_countries.append(span['countryCode'])
+                
+                if span.get('stateCode'):
+                    local_states.append(span['stateCode'])
+            
+        section_item = {
+            "route": route_id,
+            "section": section_id,
+            "mode": this_mode,
+        }
+        
+        if len(local_countries):
+            section_item['countries'] = "|".join(local_countries)
+        if len(local_states):
+            section_item['states'] = "|".join(local_states)
+        
+        if mile_or_meter == "mile":
+            section['summary']['length'] = section['summary']['length'] / 1609.34
+        
+        section_item.update(section['summary'])
+        section_item['extra duration'] = additional_duration
+        sum_duration += section['summary']['duration']
+        sum_duration += additional_duration
+        sum_length += section['summary']['length']
+        
+        results.append(section_item)
+        
+        countries=countries.union(set(local_countries))
+        states=states.union(set(local_states))
+        
+    summary_table = pd.DataFrame(results)
+    
+    out['summary'] = summary_table
+    
+    # Generate summary
+    summary_output = {
+            "table": summary_table,
+            "duration": sum_duration,
+            "modes": "|".join(list(modes)),
+            "length": sum_length
+        }
+        
+    if len(countries):
+        summary_output["countries"] = "|".join(list(countries))
+    if len(local_states):
+        summary_output["states"] = "|".join(list(states))
     
     if summary_only:
-        return out['routes'][0]['sections'][0]['summary']
+        return summary_output
     else:
+        out['summary'] = summary_output
         return out
+        
 
 # Driving distance
-def get_driving_info(origin, destination, api_key, summary_only=True, mile_or_meter="mile"):
+def get_driving_info(origin, destination, api_key, summary_only=True, mile_or_meter="mile", borders=None):
     # Checks
     assert mile_or_meter in ['mile', 'meter'], "Invalid value for mile_or_meter. Should be either 'mile' or 'meter'"
     assert summary_only in [True, False], "Invalid value for summary_only. Should be a Boolean"
     
-    out = get_route_info(origin, destination, api_key, 'car')
+    out = get_route_info(origin, destination, api_key, 'car', borders=borders)
     
     return process_routing(out, summary_only, mile_or_meter)
 
 # Walking distance
-def get_walking_info(origin, destination, api_key, summary_only=True, mile_or_meter="mile"):
+def get_walking_info(origin, destination, api_key, summary_only=True, mile_or_meter="mile", borders=None):
     # Checks
     assert mile_or_meter in ['mile', 'meter'], "Invalid value for mile_or_meter. Should be either 'mile' or 'meter'"
     assert summary_only in [True, False], "Invalid value for summary_only. Should be a Boolean"
     
-    out = get_route_info(origin, destination, api_key, 'pedestrian')
+    out = get_route_info(origin, destination, api_key, 'pedestrian', borders=borders)
     
     return process_routing(out, summary_only, mile_or_meter)
 
 # Any routing distance
-def get_any_routing_info(origin, destination, api_key, transportMode, summary_only=True, mile_or_meter="mile"):
+def get_any_routing_info(origin, destination, api_key, transportMode, summary_only=True, mile_or_meter="mile", borders=None):
     # Checks
     assert mile_or_meter in ['mile', 'meter'], "Invalid value for mile_or_meter. Should be either 'mile' or 'meter'"
     assert summary_only in [True, False], "Invalid value for summary_only. Should be a Boolean"
     assert transportMode in ['pedestrian', 'car', 'truck', 'bicycle', 'scooter'], "Invalid value for transportMode. Should be one of 'pedestrian', 'car', 'truck', 'bicycle' or 'scooter'"
     
-    out = get_route_info(origin, destination, api_key, transportMode)
+    out = get_route_info(origin, destination, api_key, transportMode, borders=borders)
     
     return process_routing(out, summary_only, mile_or_meter)
 
